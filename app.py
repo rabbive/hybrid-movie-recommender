@@ -58,15 +58,26 @@ def hybrid_recommend(user_id, movie_title, top_n=5):
     sim_scores = list(enumerate(cosine_sim[idx]))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:20]
 
+    # 🔹 Check if user exists
+    known_users = set(ratings['userId'].unique())
+    is_new_user = user_id not in known_users
+
     data = []
 
     for i, sim in sim_scores:
-        movie_id = movies.iloc[i]['movieId']
-        pred = model.predict(user_id, movie_id).est
-        final_score = (0.6 * pred) + (0.4 * sim)
+        title = movies.iloc[i]['title']
+
+        if is_new_user:
+            # 🔹 Cold-start → only content-based
+            pred = None
+            final_score = sim
+        else:
+            movie_id = movies.iloc[i]['movieId']
+            pred = model.predict(user_id, movie_id).est
+            final_score = (0.6 * pred) + (0.4 * sim)
 
         data.append({
-            "title": movies.iloc[i]['title'],
+            "title": title,
             "similarity": sim,
             "predicted_rating": pred,
             "final_score": final_score
@@ -81,7 +92,12 @@ def hybrid_recommend(user_id, movie_title, top_n=5):
 # --------------------------------------------
 st.sidebar.header("⚙️ Settings")
 
-user_id = st.sidebar.number_input("User ID", 1, 671, 1)
+user_id = st.sidebar.number_input(
+    "User ID",
+    min_value=1,
+    step=1,
+    format="%d"
+)
 
 movie_list = movies['title'].sort_values().unique()
 selected_movie = st.selectbox("🎥 Select a Movie", movie_list)

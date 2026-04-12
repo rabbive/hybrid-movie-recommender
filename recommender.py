@@ -1,13 +1,12 @@
 # ============================================
 # HYBRID MOVIE RECOMMENDATION SYSTEM
-# STEP 1–4: DATA LOADING + PREPROCESSING
 # ============================================
 
 import pandas as pd
 import ast
 
 # ============================================
-# PART 1: CONTENT-BASED FILTERING (TMDB DATA)
+# CONTENT-BASED FILTERING (TMDB DATA)
 # ============================================
 
 # Load TMDB datasets
@@ -110,7 +109,7 @@ user_movie_matrix = ratings.pivot_table(
 user_movie_matrix.fillna(0, inplace=True)
 
 # ============================================
-# PART 3: LINK BOTH DATASETS (IMPORTANT)
+# PART 3: LINK BOTH DATASETS 
 # ============================================
 
 # Load links file to connect MovieLens ↔ TMDB
@@ -292,6 +291,10 @@ def hybrid_recommend(user_id, movie_title, top_n=5):
     if movie_title not in indices:
         return "Movie not found"
     
+    # 🔹 Check if user exists (cold-start handling)
+    known_users = set(ratings['userId'].unique())
+    is_new_user = user_id not in known_users
+    
     # Get index of the movie
     idx = indices[movie_title]
     
@@ -301,7 +304,7 @@ def hybrid_recommend(user_id, movie_title, top_n=5):
     # Sort based on similarity
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
     
-    # Take top 20 similar movies for better filtering
+    # Take top 20 similar movies
     sim_scores = sim_scores[1:20]
     
     hybrid_scores = []
@@ -309,15 +312,19 @@ def hybrid_recommend(user_id, movie_title, top_n=5):
     for i, sim in sim_scores:
         movie_id = movies.iloc[i]['movieId']
         
-        # CF prediction (SVD)
-        pred_rating = model.predict(user_id, movie_id).est
-        
-        # Hybrid score (weighted combination)
-        final_score = (0.6 * pred_rating) + (0.4 * sim)
+        if is_new_user:
+            # 🔹 Cold-start → use only content-based similarity
+            final_score = sim
+        else:
+            # 🔹 Collaborative filtering (SVD)
+            pred_rating = model.predict(user_id, movie_id).est
+            
+            # Hybrid score
+            final_score = (0.6 * pred_rating) + (0.4 * sim)
         
         hybrid_scores.append((i, final_score))
     
-    # Sort by hybrid score
+    # Sort by final score
     hybrid_scores = sorted(hybrid_scores, key=lambda x: x[1], reverse=True)
     
     # Get top N movies
@@ -326,6 +333,7 @@ def hybrid_recommend(user_id, movie_title, top_n=5):
     movie_indices = [i[0] for i in top_movies]
     
     return movies['title'].iloc[movie_indices].tolist()
+
 
 # --------------------------------------------
 # 7.2 Test Hybrid Recommendation
