@@ -1,0 +1,7 @@
+# Python 3.10–3.12 recommended (scikit-surprise does not support 3.14 yet)
+numpy>=1.24,<2
+pandas>=2.0
+scikit-learn>=1.3
+scikit-surprise>=1.1.3
+streamlit>=1.28
+matplotlib>=3.7

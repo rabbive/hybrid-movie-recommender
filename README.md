@@ -1,114 +1,66 @@
-# 🎬 Hybrid Movie Recommendation System
+# Hybrid Movie Recommendation System
 
-## 📌 Overview
+## Overview
 
-This project implements a **Hybrid Movie Recommendation System** that combines both **Collaborative Filtering** and **Content-Based Filtering** techniques to provide accurate and personalized movie recommendations.
+Hybrid recommender for a **predictive analytics** course project: **content-based** recommendations use **TF-IDF** on TMDB text features and **cosine similarity** between movies; **collaborative** predictions use **Surprise SVD** on MovieLens ratings. The **Streamlit** app (`app.py`) loads trained artifacts and explains methodology with tables and plots. Full narrative for submission lives in [REPORT.md](REPORT.md).
 
-The system leverages user ratings and movie metadata to suggest movies that match user preferences effectively.
+## How the hybrid score works (warm users)
 
----
+Within each seed movie’s cosine neighborhood, **predicted rating** (SVD, roughly 0.5–5) and **cosine similarity** (0–1) are **min–max normalized** to \([0,1]\), then combined:
 
-## 🚀 Features
+`final = 0.6 * pred_norm + 0.4 * sim_norm`
 
-* 🔍 Search movies by title
-* ⭐ Predict user ratings for movies
-* 🎯 Personalized recommendations
-* 🤝 Hybrid approach (Content + Collaborative)
-* 📊 Uses SVD (Singular Value Decomposition) for collaborative filtering
-* 🧠 Uses TF-IDF + Cosine Similarity for content-based filtering
-* 🌐 Optional Streamlit-based UI
+**Cold-start** users (no rows in `ratings_small.csv`) are ranked by **cosine similarity only**. Implementation: [recommender_core.py](recommender_core.py).
 
----
-
-## 🛠️ Technologies Used
-
-* Python
-* Pandas
-* NumPy
-* Scikit-learn
-* Surprise Library (SVD Model)
-* Streamlit (for UI)
-
----
-
-## 📂 Project Structure
+## Project structure
 
 ```
-├── app.py                 # Streamlit frontend
-├── recommender.py               # Recommendation logic
+├── app.py                 # Streamlit UI + figures
+├── recommender.py         # Training pipeline (run via train.py or directly)
+├── recommender_core.py    # Shared hybrid_recommend()
+├── train.py               # One-command training → pickles
+├── requirements.txt       # Pins numpy<2 for scikit-surprise
+├── REPORT.md              # Professor-facing methodology write-up
+├── ratings_small.csv
+├── links_small.csv
 ├── tmdb_5000_movies.csv
 ├── tmdb_5000_credits.csv
-│   ratings_small.csv
-├── links_small.csv
 └── README.md
 ```
 
----
+After training, the repo root also contains `movies.pkl`, `cosine_sim.pkl`, `indices.pkl`, `svd_model.pkl`, `rmse.pkl`, `dataset_stats.pkl`, and `cv_metrics.pkl` (large binaries; regenerate locally—do not commit if your course forbids large files).
 
-## ⚙️ How It Works
+## Technologies
 
-### 1. Content-Based Filtering
+- Python 3.10–3.12 (3.14 not supported by scikit-surprise at time of writing)
+- pandas, NumPy (see `requirements.txt`: pin below 2.x for scikit-surprise), scikit-learn, scikit-surprise, Streamlit, matplotlib
 
-* Uses movie metadata such as genres, keywords, etc.
-* Applies **TF-IDF Vectorization**
-* Computes similarity using **Cosine Similarity**
+## Setup
 
-### 2. Collaborative Filtering
-
-* Uses user ratings dataset
-* Implements **SVD (Singular Value Decomposition)**
-* Learns latent features of users and movies
-
-### 3. Hybrid Approach
-
-* Combines results from both methods
-* Improves recommendation accuracy
-* Balances personalization and similarity
-
----
-
-## ▶️ Installation & Setup
-
-### 1. Clone the repository
-
-```
-git clone https://github.com/your-username/hybrid-movie-recommender.git
+```bash
+git clone https://github.com/rabbive/hybrid-movie-recommender.git
 cd hybrid-movie-recommender
-```
-
-
-### 2. Run the application
-
-```
-python recoomender.py
+python3.12 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python train.py             # builds all .pkl artifacts
 streamlit run app.py
 ```
 
----
+## Evaluation
 
-## 📊 Model Performance
+- **3-fold cross-validated RMSE** (mean ± std) is saved to `cv_metrics.pkl` and shown in the app.
+- **Single 80/20 split** RMSE on the saved model is in `rmse.pkl` (typical value ~0.89).
 
-* RMSE (Collaborative Filtering): ~0.89
-* Provides top-N recommendations based on similarity and predicted ratings
+## Model performance (example run)
 
----
+Figures vary slightly with randomness; see your `train.py` stdout and Streamlit metrics after you train.
 
+## Authors
 
-## 🔮 Future Improvements
+- Original: nando-g
+- Fork / coursework: rabbive
 
-* Add deep learning models
-* Improve UI/UX
-* Deploy on cloud (AWS / Heroku)
-* Add user authentication
+## License
 
----
-
-## 👨‍💻 Author
-
-* nando-g
-
----
-
-## 📜 License
-
-This project is for educational purposes only.
+Educational use only.
