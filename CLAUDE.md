@@ -14,9 +14,37 @@ hybrid-movie-recommender/
 ├── recommender.py           # Full training pipeline — runs once to produce all pickle artifacts
 ├── train.py                 # Entry point: just calls recommender.train_all()
 ├── app.py                   # Streamlit web UI — loads pickles and serves recommendations
-├── requirements.txt         # Python dependency pins
+├── api.py                   # FastAPI backend — serves /movies, /recommend, /stats for Next.js UI
+├── requirements.txt         # Python dependency pins (includes fastapi + uvicorn)
 ├── README.md                # User-facing setup/usage docs
 ├── REPORT.md                # Academic methodology report
+│
+└── frontend/                # Next.js 14 + shadcn/ui frontend (dark minimal UI)
+    ├── package.json
+    ├── tsconfig.json
+    ├── next.config.mjs
+    ├── tailwind.config.ts
+    ├── postcss.config.js
+    ├── components.json      # shadcn configuration
+    ├── app/
+    │   ├── globals.css      # CSS variables (dark theme, zinc palette)
+    │   ├── layout.tsx       # Root layout with Sidebar
+    │   └── page.tsx         # Main dashboard page (client component)
+    ├── components/
+    │   ├── sidebar.tsx      # Left navigation sidebar
+    │   ├── stats-cards.tsx  # 4-card metrics grid
+    │   ├── movie-combobox.tsx  # Searchable movie selector (Command + Popover)
+    │   └── ui/              # shadcn/ui primitives
+    │       ├── button.tsx
+    │       ├── card.tsx
+    │       ├── badge.tsx
+    │       ├── input.tsx
+    │       ├── separator.tsx
+    │       ├── command.tsx  # cmdk-based command palette
+    │       ├── popover.tsx
+    │       └── scroll-area.tsx
+    └── lib/
+        └── utils.ts         # cn() helper (clsx + tailwind-merge)
 │
 ├── Input data (CSV — committed to repo):
 │   ├── ratings_small.csv        # MovieLens: userId, movieId, rating, timestamp (~100k rows)
@@ -46,6 +74,21 @@ hybrid-movie-recommender/
 | Collaborative | scikit-surprise >= 1.1.3 | SVD matrix factorization |
 | Data | pandas >= 2.0, numpy >= 1.24,<2 | NumPy pinned below 2.x for scikit-surprise |
 | Visualization | matplotlib >= 3.7 | Charts rendered inline in Streamlit |
+
+---
+
+## Technology Stack
+
+| Layer | Library | Notes |
+|---|---|---|
+| Language | Python 3.10–3.12 | **3.13+ not supported** — scikit-surprise incompatibility |
+| Web UI (legacy) | Streamlit >= 1.28 | Single-page app, still works standalone |
+| Web UI (new) | Next.js 14 + shadcn/ui | Dark minimal UI, requires the FastAPI backend |
+| API backend | FastAPI + uvicorn | Serves `/movies`, `/recommend`, `/stats` |
+| Content-based | scikit-learn >= 1.3 | TfidfVectorizer + cosine_similarity |
+| Collaborative | scikit-surprise >= 1.1.3 | SVD matrix factorization |
+| Data | pandas >= 2.0, numpy >= 1.24,<2 | NumPy pinned below 2.x for scikit-surprise |
+| Visualization | matplotlib >= 3.7 | Charts in the Streamlit app only |
 
 ---
 
@@ -81,13 +124,31 @@ Holdout test RMSE: X.XXXX
 ✅ All models saved successfully!
 ```
 
-### Running the app
+### Running the Streamlit app (standalone, no API needed)
 
 ```bash
 streamlit run app.py
 ```
 
 All pickle files must exist before launching. The app loads them once via `@st.cache_resource` and keeps them in memory for the session.
+
+### Running the Next.js frontend + FastAPI backend
+
+Terminal 1 — start the API (must run from repo root so pickles are found):
+```bash
+uvicorn api:app --reload --port 8000
+```
+
+Terminal 2 — start the Next.js dev server:
+```bash
+cd frontend
+npm install   # first time only
+npm run dev
+```
+
+Open `http://localhost:3000`. The frontend calls `http://localhost:8000`.
+
+**CORS**: `api.py` allows `http://localhost:3000` only. For other origins update `allow_origins` in `api.py`.
 
 ### No test suite
 
