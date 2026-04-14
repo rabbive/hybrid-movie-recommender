@@ -25,7 +25,16 @@ import {
   Users,
   AlertCircle,
   Loader2,
+  BarChart3,
 } from "lucide-react";
+import {
+  RatingsDistributionChart,
+  RatingsPerUserChart,
+  CosineSimilaritiesChart,
+  SimilarityChart,
+  FinalScoreChart,
+  PredictedRatingChart,
+} from "@/components/analysis-charts";
 
 const API = "http://localhost:8000";
 
@@ -366,6 +375,37 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Figures for Analysis */}
+      <Separator className="bg-zinc-800" />
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-zinc-400" />
+          <h2 className="text-sm font-medium text-zinc-400">
+            Figures for Analysis
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <RatingsDistributionChart />
+          <RatingsPerUserChart />
+        </div>
+
+        {selectedMovie && (
+          <CosineSimilaritiesChart movieTitle={selectedMovie} />
+        )}
+
+        {recommendations && recommendations.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SimilarityChart recommendations={recommendations} />
+            <FinalScoreChart recommendations={recommendations} />
+          </div>
+        )}
+
+        {recommendations && recommendations.length > 0 && (
+          <PredictedRatingChart recommendations={recommendations} />
+        )}
+      </div>
     </div>
   );
 }

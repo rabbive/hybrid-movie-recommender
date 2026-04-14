@@ -89,3 +89,50 @@ async def get_stats():
         "cv_metrics": _models.get("cv_metrics"),
         "rmse": float(rmse) if rmse is not None else None,
     }
+
+
+@app.get("/charts/ratings-distribution")
+async def ratings_distribution():
+    """Histogram data for the distribution of all ratings."""
+    ratings = _models["ratings"]
+    counts, bin_edges = pd.cut(ratings["rating"], bins=10, retbins=True)
+    hist = ratings["rating"].value_counts().sort_index()
+    return [
+        {"rating": float(r), "count": int(c)}
+        for r, c in hist.items()
+    ]
+
+
+@app.get("/charts/ratings-per-user")
+async def ratings_per_user():
+    """Histogram data for number of ratings each user has given."""
+    import numpy as np
+
+    ratings = _models["ratings"]
+    user_counts = ratings.groupby("userId").size().values
+    counts, bin_edges = np.histogram(user_counts, bins=30)
+    return [
+        {"bin_start": round(float(bin_edges[i]), 1), "bin_end": round(float(bin_edges[i + 1]), 1), "count": int(counts[i])}
+        for i in range(len(counts))
+    ]
+
+
+@app.get("/charts/cosine-similarities")
+async def cosine_similarities(movie_title: str):
+    """Histogram of cosine similarities between a seed movie and all others."""
+    import numpy as np
+
+    indices = _models["indices"]
+    cosine_sim = _models["cosine_sim"]
+    title_lower = movie_title.lower()
+    if title_lower not in indices:
+        raise HTTPException(status_code=404, detail=f"Movie '{movie_title}' not found.")
+    idx = int(indices[title_lower])
+    row = cosine_sim[idx]
+    mask = row < 0.9999
+    values = row[mask]
+    counts, bin_edges = np.histogram(values, bins=40)
+    return [
+        {"bin_start": round(float(bin_edges[i]), 4), "bin_end": round(float(bin_edges[i + 1]), 4), "count": int(counts[i])}
+        for i in range(len(counts))
+    ]
