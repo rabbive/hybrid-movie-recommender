@@ -8,6 +8,7 @@ import pickle
 from contextlib import asynccontextmanager
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +16,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from recommender_core import hybrid_recommend
 
 _models: dict[str, Any] = {}
+
+
+def _histogram(values: Any, bins: int) -> dict[str, list[float] | list[int]]:
+    counts, edges = np.histogram(values, bins=bins)
+    return {
+        "counts": counts.astype(int).tolist(),
+        "bin_starts": edges[:-1].round(4).tolist(),
+        "bin_ends": edges[1:].round(4).tolist(),
+    }
 
 
 @asynccontextmanager
@@ -90,49 +100,69 @@ async def get_stats():
         "rmse": float(rmse) if rmse is not None else None,
     }
 
-
 @app.get("/charts/ratings-distribution")
 async def ratings_distribution():
-    """Histogram data for the distribution of all ratings."""
     ratings = _models["ratings"]
-    counts, bin_edges = pd.cut(ratings["rating"], bins=10, retbins=True)
     hist = ratings["rating"].value_counts().sort_index()
-    return [
-        {"rating": float(r), "count": int(c)}
-        for r, c in hist.items()
-    ]
+    return [{"rating": float(r), "count": int(c)} for r, c in hist.items()]
 
 
 @app.get("/charts/ratings-per-user")
 async def ratings_per_user():
-    """Histogram data for number of ratings each user has given."""
-    import numpy as np
-
     ratings = _models["ratings"]
-    user_counts = ratings.groupby("userId").size().values
+    user_counts = ratings.groupby("userId").size()
     counts, bin_edges = np.histogram(user_counts, bins=30)
     return [
-        {"bin_start": round(float(bin_edges[i]), 1), "bin_end": round(float(bin_edges[i + 1]), 1), "count": int(counts[i])}
+        {
+            "bin_start": round(float(bin_edges[i]), 1),
+            "bin_end": round(float(bin_edges[i + 1]), 1),
+            "count": int(counts[i]),
+        }
         for i in range(len(counts))
     ]
 
 
 @app.get("/charts/cosine-similarities")
 async def cosine_similarities(movie_title: str):
-    """Histogram of cosine similarities between a seed movie and all others."""
-    import numpy as np
-
     indices = _models["indices"]
-    cosine_sim = _models["cosine_sim"]
-    title_lower = movie_title.lower()
-    if title_lower not in indices:
+    key = movie_title.lower()
+    if key not in indices:
         raise HTTPException(status_code=404, detail=f"Movie '{movie_title}' not found.")
-    idx = int(indices[title_lower])
-    row = cosine_sim[idx]
+    idx = int(indices[key])
+    row = np.asarray(_models["cosine_sim"][idx], dtype=float)
     mask = row < 0.9999
-    values = row[mask]
-    counts, bin_edges = np.histogram(values, bins=40)
+    counts, bin_edges = np.histogram(row[mask], bins=40)
     return [
-        {"bin_start": round(float(bin_edges[i]), 4), "bin_end": round(float(bin_edges[i + 1]), 4), "count": int(counts[i])}
+        {
+            "bin_start": round(float(bin_edges[i]), 4),
+            "bin_end": round(float(bin_edges[i + 1]), 4),
+            "count": int(counts[i]),
+        }
         for i in range(len(counts))
     ]
+
+
+@app.get("/charts/overview")
+async def get_overview_charts():
+    ratings = _models["ratings"]
+    per_user_counts = ratings.groupby("userId").size()
+    return {
+        "ratings_histogram": _histogram(ratings["rating"], bins=10),
+        "ratings_per_user_histogram": _histogram(per_user_counts, bins=30),
+    }
+
+
+@app.get("/charts/cosine")
+async def get_cosine_chart(movie_title: str):
+    indices = _models["indices"]
+    key = movie_title.lower()
+    if key not in indices:
+        raise HTTPException(status_code=404, detail=f"Movie '{movie_title}' not found.")
+
+    idx = int(indices[key])
+    row = np.asarray(_models["cosine_sim"][idx], dtype=float)
+    mask = row < 0.9999
+    return {
+        "movie_title": movie_title,
+        "cosine_histogram": _histogram(row[mask], bins=40),
+    }

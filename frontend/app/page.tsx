@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { StatsCards } from "@/components/stats-cards";
 import { MovieCombobox } from "@/components/movie-combobox";
+import { HistogramCard, HorizontalBarCard } from "@/components/charts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,16 +26,7 @@ import {
   Users,
   AlertCircle,
   Loader2,
-  BarChart3,
 } from "lucide-react";
-import {
-  RatingsDistributionChart,
-  RatingsPerUserChart,
-  CosineSimilaritiesChart,
-  SimilarityChart,
-  FinalScoreChart,
-  PredictedRatingChart,
-} from "@/components/analysis-charts";
 
 const API = "http://localhost:8000";
 
@@ -58,6 +50,22 @@ interface Recommendation {
   final_score: number;
 }
 
+interface HistogramData {
+  counts: number[];
+  bin_starts: number[];
+  bin_ends: number[];
+}
+
+interface OverviewCharts {
+  ratings_histogram: HistogramData;
+  ratings_per_user_histogram: HistogramData;
+}
+
+interface CosineChartData {
+  movie_title: string;
+  cosine_histogram: HistogramData;
+}
+
 function titleCase(str: string) {
   return str.replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -65,6 +73,10 @@ function titleCase(str: string) {
 export default function Home() {
   const [movies, setMovies] = useState<string[]>([]);
   const [stats, setStats] = useState<StatsData | null>(null);
+  const [overviewCharts, setOverviewCharts] = useState<OverviewCharts | null>(
+    null
+  );
+  const [cosineChart, setCosineChart] = useState<CosineChartData | null>(null);
   const [selectedMovie, setSelectedMovie] = useState("");
   const [userId, setUserId] = useState(1);
   const [recommendations, setRecommendations] = useState<
@@ -79,10 +91,12 @@ export default function Home() {
     Promise.all([
       fetch(`${API}/movies`).then((r) => r.json()),
       fetch(`${API}/stats`).then((r) => r.json()),
+      fetch(`${API}/charts/overview`).then((r) => r.json()),
     ])
-      .then(([moviesData, statsData]) => {
+      .then(([moviesData, statsData, overviewData]) => {
         setMovies(moviesData.movies);
         setStats(statsData);
+        setOverviewCharts(overviewData);
         if (moviesData.movies.length > 0) setSelectedMovie(moviesData.movies[0]);
       })
       .catch(() =>
@@ -92,6 +106,21 @@ export default function Home() {
       )
       .finally(() => setBootstrapping(false));
   }, []);
+
+  useEffect(() => {
+    if (!selectedMovie) {
+      setCosineChart(null);
+      return;
+    }
+
+    fetch(`${API}/charts/cosine?movie_title=${encodeURIComponent(selectedMovie)}`)
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to load cosine similarity chart");
+        return r.json();
+      })
+      .then((data) => setCosineChart(data))
+      .catch(() => setCosineChart(null));
+  }, [selectedMovie]);
 
   async function runRecommend(movieTitle: string) {
     if (!movieTitle) return;
@@ -259,6 +288,45 @@ export default function Home() {
         </div>
       )}
 
+      <div className="space-y-3">
+        <h2 className="text-sm font-medium text-zinc-400">Figures for Analysis</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <HistogramCard
+            title="Distribution of Ratings"
+            subtitle="Matches the original Streamlit histogram of rating values."
+            data={overviewCharts?.ratings_histogram ?? null}
+            colorClass="bg-blue-500"
+          />
+          <HistogramCard
+            title="Ratings Per User"
+            subtitle="Shows the long-tail behavior in user activity."
+            data={overviewCharts?.ratings_per_user_histogram ?? null}
+            colorClass="bg-orange-500"
+          />
+          <HistogramCard
+            title="Cosine Similarity vs Other Movies"
+            subtitle={
+              cosineChart
+                ? `Seed movie: ${titleCase(cosineChart.movie_title)}`
+                : "Pick a seed movie to inspect the similarity spread."
+            }
+            data={cosineChart?.cosine_histogram ?? null}
+            colorClass="bg-emerald-500"
+          />
+          <HorizontalBarCard
+            title="Hybrid Final Score"
+            subtitle="Top recommendation scores after normalized fusion."
+            data={
+              recommendations?.map((rec) => ({
+                label: titleCase(rec.title),
+                value: rec.final_score,
+              })) ?? []
+            }
+            colorClass="bg-violet-500"
+          />
+        </div>
+      </div>
+
       {/* Data sources — mirrors "Source Control" section */}
       <div className="space-y-2">
         <h2 className="text-sm font-medium text-zinc-400">Data Sources</h2>
@@ -373,39 +441,32 @@ export default function Home() {
               </Card>
             ))}
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <HorizontalBarCard
+              title="Content Similarity"
+              subtitle="Cosine similarity for the top recommended movies."
+              data={recommendations.map((rec) => ({
+                label: titleCase(rec.title),
+                value: rec.similarity,
+              }))}
+              colorClass="bg-teal-500"
+            />
+            <HorizontalBarCard
+              title="Predicted Rating (SVD)"
+              subtitle="Shown only for warm users with collaborative estimates."
+              data={recommendations
+                .filter((rec) => rec.predicted_rating !== null)
+                .map((rec) => ({
+                  label: titleCase(rec.title),
+                  value: rec.predicted_rating ?? 0,
+                }))}
+              colorClass="bg-amber-500"
+              formatter={(value) => value.toFixed(2)}
+            />
+          </div>
         </div>
       )}
-
-      {/* Figures for Analysis */}
-      <Separator className="bg-zinc-800" />
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="w-4 h-4 text-zinc-400" />
-          <h2 className="text-sm font-medium text-zinc-400">
-            Figures for Analysis
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <RatingsDistributionChart />
-          <RatingsPerUserChart />
-        </div>
-
-        {selectedMovie && (
-          <CosineSimilaritiesChart movieTitle={selectedMovie} />
-        )}
-
-        {recommendations && recommendations.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SimilarityChart recommendations={recommendations} />
-            <FinalScoreChart recommendations={recommendations} />
-          </div>
-        )}
-
-        {recommendations && recommendations.length > 0 && (
-          <PredictedRatingChart recommendations={recommendations} />
-        )}
-      </div>
     </div>
   );
 }
